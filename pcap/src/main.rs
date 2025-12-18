@@ -1,5 +1,6 @@
 use pcap::{Capture, Device};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::collections::HashSet;
 
 #[derive(Debug)]
 enum TransportProtocol {
@@ -28,6 +29,7 @@ fn main() {
 }
 
 fn check_packet_arrival() {
+    let mut seen_ips: HashSet<IpAddr> = HashSet::new();
     let main_device = Device::lookup().unwrap().unwrap();
     let mut cap = Capture::from_device(main_device).unwrap()
                     .promisc(true)
@@ -36,11 +38,16 @@ fn check_packet_arrival() {
 
     while let Ok(packet) = cap.next_packet() {
         println!("\nreceived packet!");
-        parse_packet(packet.data);
+        let packet = parse_packet(packet.data);
+        if let Some(packet_data) = packet {
+            if !seen_ips.contains(&packet_data.ip.source_ip) {
+                seen_ips.insert(packet_data.ip.source_ip);
+            }
+        }
     }
 }
 
-fn parse_packet(data: &[u8]) {
+fn parse_packet(data: &[u8]) -> Option<PacketData> {
     let ether_type = &data[12..14];
     let packet = match ether_type {
         &[134, 221] => { // IPv6 bytes 12-13 = 86DD
@@ -57,13 +64,14 @@ fn parse_packet(data: &[u8]) {
         }
     };
 
-    if let Some(packet_info) = packet {
+    if let Some(packet_info) = &packet {
         packet_info.display_contents();
+        // Virus Total logic
     }
     else {
         println!("Part of the packet used an unknown protocol");
     }
-
+    packet
 } 
 
 fn parse_IPv6(data: &[u8]) -> PacketData {
