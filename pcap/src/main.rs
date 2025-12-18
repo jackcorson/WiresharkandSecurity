@@ -1,24 +1,26 @@
-use pcap::{Device, Capture};
+use pcap::{Capture, Device};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 #[derive(Debug)]
-enum Transport_Protocol {
+enum TransportProtocol {
     TCP,
     UDP,
     Unknown,
 }
 
-struct Packet_Data<'a> {
-    ip: IP_Data<'a>,
-    transport: Transport_Data,
+struct PacketData {
+    ip: IPData,
 }
 
-struct IP_Data<'a> {
-    source_ip: &'a [i32],
-    next_header: Transport_Protocol,
+struct IPData {
+    source_ip: IpAddr,
+    next_header: TransportProtocol,
 }
 
-struct Transport_Data {
-
+impl PacketData {
+    fn display_contents(&self) {
+        println!("Packet from {:?} using {:?} protocol", self.ip.source_ip, self.ip.next_header);
+    }
 }
 
 fn main() {
@@ -33,40 +35,79 @@ fn check_packet_arrival() {
                     .open().unwrap();
 
     while let Ok(packet) = cap.next_packet() {
-        println!("received packet!");
+        println!("\nreceived packet!");
         parse_packet(packet.data);
     }
 }
 
 fn parse_packet(data: &[u8]) {
     let ether_type = &data[12..14];
-    match ether_type {
+    let packet = match ether_type {
         &[134, 221] => { // IPv6 bytes 12-13 = 86DD
             println!("This packet is IPv6");
-            println!("{:?}", data);
-            parse_IPv6(&data[14..54]);
+            Some(parse_IPv6(&data[14..54]))
         },
         &[8, 0] => { // IPv4 bytes 12-13 = 0800
-            println!("This packet is IPv4")
+            println!("This packet is IPv4");
+            Some(parse_IPv4(&data[0..20]))
         },
-        _ => println!("Other etherType")
-    }
-} 
-
-fn parse_IPv6(data: &[u8]) {
-    let trans_pro = match &data[6..7] {
-        &[6] => Transport_Protocol::TCP,
-        &[17] => Transport_Protocol::UDP,
-        _ => Transport_Protocol::Unknown,
+        _ => {
+            println!("Other etherType");
+            None
+        }
     };
 
-    println!("{:?}", trans_pro);
+    if let Some(packet_info) = packet {
+        packet_info.display_contents();
+    }
+    else {
+        println!("Part of the packet used an unknown protocol");
+    }
 
-    // let ip_header_info: IP_Data = IP_Data {
-        
-    // };
+} 
+
+fn parse_IPv6(data: &[u8]) -> PacketData {
+    let trans_pro = match &data[6..7] {
+        &[6] => TransportProtocol::TCP,
+        &[17] => TransportProtocol::UDP,
+        _ => TransportProtocol::Unknown,
+    };
+
+    let ip_bytes: [u8; 16] = data[8..24].try_into().expect("Could not cast to [u8; 16]");
+
+    let source_addr: Ipv6Addr = Ipv6Addr::from(ip_bytes);
+
+    let ip_header_info: IPData = IPData {
+        source_ip: IpAddr::V6(source_addr),
+        next_header: trans_pro,
+    };
     
-    // let packet_data_info: Packet_Data = Packet_Data {
-        
-    // };
+    let packet_data_info: PacketData = PacketData {
+        ip: ip_header_info,
+    };
+
+    packet_data_info
 }
+
+fn parse_IPv4(data: &[u8]) -> PacketData {
+    let trans_pro = match &data[9..10] {
+        &[6] => TransportProtocol::TCP,
+        &[17] => TransportProtocol::UDP,
+        _ => TransportProtocol::Unknown,
+    };
+
+    let ip_bytes: [u8; 4] = data[12..16].try_into().expect("Could not cast to [u8; 4]");
+
+    let source_addr = Ipv4Addr::from(ip_bytes);
+
+    let ip_header_info: IPData = IPData {
+        source_ip: IpAddr::V4(source_addr),
+        next_header: trans_pro,
+    };
+
+    let packet_data_info: PacketData = PacketData {
+        ip: ip_header_info,
+    };
+
+    packet_data_info
+} 
