@@ -180,7 +180,7 @@ fn check_malicious(response: String) -> bool {
 }
 
 async fn send_email_warning(packet_info: &PacketData) -> Result<(), Box<dyn std::error::Error>>   {
-    let body = String::from("<h1>Malicious packet detected from source ") + &packet_info.ip.source_ip.to_string() + "</h1>";
+    let body = String::from("Malicious packet detected from source ") + &packet_info.ip.source_ip.to_string();
 
     let file_path = "email.txt";
     let contents = fs::read_to_string(file_path)
