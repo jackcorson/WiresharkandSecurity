@@ -37,7 +37,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn check_packet_arrival() -> Result<(), Box<dyn std::error::Error>> {
     let mut seen_ips: HashSet<IpAddr> = HashSet::new();
-    let main_device = Device::lookup().unwrap().unwrap();
+    let devices = Device::list()?;
+    let main_device = devices
+        .into_iter()
+        .find(|d| d.name == "en0")
+        .expect("Could not find en0");
     let mut cap = Capture::from_device(main_device).unwrap()
                     .promisc(true)
                     .snaplen(5000)
@@ -80,6 +84,7 @@ async fn parse_packet(seen_ips: &HashSet<IpAddr>, data: &[u8]) -> Result<Option<
             let malicious = check_malicious(response);
             if malicious {
                 // Send email
+                println!("THIS EMAIL IS MALICIOUS\n");
                 send_email_warning(&packet_info).await?;
             }
         }
